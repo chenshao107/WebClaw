@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 12px 0;
+      color: #333;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #f5f5f5;
+      margin-bottom: 12px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+    .status-dot.connected {
+      background: #22c55e;
+    }
+    .status-dot.disconnected {
+      background: #ef4444;
+    }
+    .info {
+      font-size: 12px;
+      color: #666;
+      line-height: 1.5;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 4px;
+      background: #3b82f6;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>MacroChrome Bridge</h1>
+  
+  <div class="status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+  
+  <div class="info">
+    <p>WebSocket: <span id="wsUrl">ws://192.168.86.247:8765</span></p>
+    <p>Current page: <span id="currentPage">-</span></p>
+  </div>
+  
+  <button id="reconnectBtn">Reconnect</button>
+  <button id="testBtn">Send Test Message</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

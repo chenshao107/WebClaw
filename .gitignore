@@ -4,12 +4,27 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
 venv/
-env/
 ENV/
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
+env/
+.venv/
 
 # IDE
 .vscode/
@@ -17,15 +32,35 @@ pip-delete-this-directory.txt
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Logs
-*.log
-
-# Local config
+# 环境变量
 .env
 .env.local
+.env.*.local
 
-# Chrome Extension (build artifacts)
-*.zip
-*.crx
+# 日志
+*.log
+logs/
+
+# 截图和下载文件
+*.png
+*.jpg
+*.jpeg
+*.pdf
+downloads/
+screenshots/
+
+# Playwright
+.playwright/
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 项目特定
+debug_screenshot.png

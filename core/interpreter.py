@@ -5,13 +5,15 @@
 1. 保持 Playwright 的 browser 和 page 对象在多个代码块执行间不销毁
 2. 使用 InteractiveInterpreter 自动累积变量状态
 3. 将执行过程中的观察结果返回给执行层 Agent
+4. 动态注入工具函数，自动发现和管理
 """
 
 import io
 import sys
 import traceback
 import code
-from typing import Dict, Any, Optional
+import inspect
+from typing import Dict, Any, Optional, Callable, List
 from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass, field
 
@@ -33,7 +35,11 @@ class CodeInterpreter:
     代码解释器类 - 基于 code.InteractiveInterpreter
     
     提供真正的交互式代码执行环境，变量状态自动累积
+    支持动态工具函数注入和自动发现
     """
+    
+    # 类级别的工具注册表
+    _tool_registry: Dict[str, Callable] = {}
     
     def __init__(self):
         # 这是一个真正的交互式命名空间，它会保存所有执行过的状态
@@ -46,6 +52,102 @@ class CodeInterpreter:
         self._page: Optional[Any] = None
         self._context: Optional[Any] = None
         self._pw: Optional[Any] = None
+        
+        # 自动注册内置工具
+        self._register_builtin_tools()
+    
+    @classmethod
+    def register_tool(cls, name: str, func: Callable) -> None:
+        """
+        注册一个工具函数到全局注册表
+        
+        Args:
+            name: 工具函数在环境中的名称
+            func: 函数对象
+        """
+        cls._tool_registry[name] = func
+    
+    @classmethod
+    def get_tool_descriptions(cls) -> List[Dict[str, str]]:
+        """
+        获取所有已注册工具的描述信息
+        
+        Returns:
+            List[Dict]: 工具名称和文档字符串列表
+        """
+        tools = []
+        for name, func in cls._tool_registry.items():
+            doc = func.__doc__ or "无描述"
+            # 只取文档的第一行作为简短描述
+            short_doc = doc.strip().split('\n')[0] if doc else "无描述"
+            # 获取函数签名
+            sig = str(inspect.signature(func))
+            tools.append({
+                "name": name,
+                "signature": sig,
+                "description": short_doc
+            })
+        return tools
+    
+    def _register_builtin_tools(self) -> None:
+        """注册内置工具函数"""
+        # 标签页工具 - 使用闭包捕获 self
+        self.register_tool("get_tabs", lambda ctx=None: self._get_tabs_impl(ctx))
+        self.register_tool("list_tabs", lambda ctx=None: self._list_tabs_impl(ctx))
+        
+        # 页面快照工具
+        from tools.page_snapshot import capture_snapshot
+        self.register_tool("capture_snapshot", capture_snapshot)
+    
+    def _get_tabs_impl(self, ctx=None) -> List[Any]:
+        """
+        只返回用户可见的 HTTP(S) 标签页，过滤掉 Chrome 内部页面
+        
+        Args:
+            ctx: 浏览器上下文，如果不传则使用当前 interpreter 的 context
+            
+        Returns:
+            List[Page]: 真实网页标签页列表
+        """
+        if ctx is None:
+            ctx = self._context
+        if not ctx:
+            return []
+        return [p for p in ctx.pages if p.url.startswith(('http://', 'https://'))]
+    
+    def _list_tabs_impl(self, ctx=None) -> List[Dict]:
+        """
+        列出所有标签页信息，带 🌐/⚙️ 标记区分真实页面和内部页面
+        
+        Args:
+            ctx: 浏览器上下文，如果不传则使用当前 interpreter 的 context
+            
+        Returns:
+            List[Dict]: 标签页信息列表
+        """
+        if ctx is None:
+            ctx = self._context
+        if not ctx:
+            print("[错误] context 未初始化")
+            return []
+        
+        tabs = []
+        for i, p in enumerate(ctx.pages):
+            try:
+                url = p.url
+                is_real = url.startswith(('http://', 'https://'))
+                marker = "🌐" if is_real else "⚙️"
+                tabs.append({
+                    "index": i,
+                    "url": url,
+                    "title": p.title() if hasattr(p, 'title') else "N/A",
+                    "is_real_page": is_real,
+                    "marker": marker
+                })
+                print(f"{marker} [{i}] {url}")
+            except Exception as e:
+                print(f"⚠️  [{i}] 无法获取信息: {e}")
+        return tabs
     
     def initialize(self, headless: bool = False, debug_port: Optional[int] = None) -> ExecutionResult:
         """
@@ -135,6 +237,10 @@ class CodeInterpreter:
             self.locals["browser"] = self._browser
         if self._pw:
             self.locals["p"] = self._pw
+        
+        # 【动态注入工具函数】从注册表自动注入所有工具
+        for name, func in self._tool_registry.items():
+            self.locals[name] = func
 
         try:
             # 捕获所有输出

@@ -1,16 +1,17 @@
 """
-代码解释器：负责 exec() 和 Playwright 持久化
+代码解释器：使用 code.InteractiveInterpreter 实现真正的交互式执行环境
 
 核心职责：
 1. 保持 Playwright 的 browser 和 page 对象在多个代码块执行间不销毁
-2. 限制执行环境，捕获所有 stdout 和 stderr
+2. 使用 InteractiveInterpreter 自动累积变量状态
 3. 将执行过程中的观察结果返回给执行层 Agent
 """
 
 import io
 import sys
 import traceback
-from typing import Dict, Any, Optional, Tuple
+import code
+from typing import Dict, Any, Optional
 from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass, field
 
@@ -29,24 +30,22 @@ class ExecutionResult:
 
 class CodeInterpreter:
     """
-    代码解释器类
+    代码解释器类 - 基于 code.InteractiveInterpreter
     
-    提供安全的代码执行环境，保持 Playwright 浏览器状态
+    提供真正的交互式代码执行环境，变量状态自动累积
     """
     
     def __init__(self):
-        # 持久化的执行环境
-        self._globals: Dict[str, Any] = {}
-        self._locals: Dict[str, Any] = {}
+        # 这是一个真正的交互式命名空间，它会保存所有执行过的状态
+        self.locals: Dict[str, Any] = {}
+        self.interpreter = code.InteractiveInterpreter(self.locals)
         self._initialized: bool = False
         
-        # 浏览器相关对象引用
+        # 浏览器相关对象引用（本地保存一份方便访问）
         self._browser: Optional[Any] = None
         self._page: Optional[Any] = None
         self._context: Optional[Any] = None
-        
-        # 执行历史
-        self._execution_history: list = []
+        self._pw: Optional[Any] = None
     
     def initialize(self, headless: bool = False, debug_port: Optional[int] = None) -> ExecutionResult:
         """
@@ -60,117 +59,112 @@ class CodeInterpreter:
             ExecutionResult: 初始化结果
         """
         import time
+        from playwright.sync_api import sync_playwright
+        
         start_time = time.time()
-        
-        init_code = '''
-from playwright.sync_api import sync_playwright
-
-# 启动 Playwright
-p = sync_playwright().start()
-
-# 浏览器启动参数
-launch_args = {
-    "headless": headless,
-}
-
-# 如果提供了调试端口，连接到现有 Chrome
-if debug_port:
-    browser = p.chromium.connect_over_cdp(f"http://localhost:{debug_port}")
-    context = browser.contexts[0] if browser.contexts else browser.new_context()
-else:
-    browser = p.chromium.launch(**launch_args)
-    context = browser.new_context(
-        viewport={"width": 1920, "height": 1080}
-    )
-
-page = context.new_page()
-
-print(f"[初始化成功] Browser: {browser}, Page: {page}")
-'''
-        
-        result = self.execute(init_code, {
-            'headless': headless,
-            'debug_port': debug_port
-        })
-        
-        if result.success:
-            self._initialized = True
-            # 保存关键对象引用
-            self._browser = self._globals.get('browser')
-            self._page = self._globals.get('page')
-            self._context = self._globals.get('context')
-        
-        result.execution_time = time.time() - start_time
-        return result
-    
-    def execute(self, code: str, extra_globals: Optional[Dict[str, Any]] = None) -> ExecutionResult:
-        """
-        执行 Python 代码
-        
-        Args:
-            code: 要执行的代码字符串
-            extra_globals: 额外的全局变量
-            
-        Returns:
-            ExecutionResult: 执行结果
-        """
-        import time
-        start_time = time.time()
-        
-        # 准备执行环境
-        exec_globals = self._globals.copy()
-        if extra_globals:
-            exec_globals.update(extra_globals)
-        
-        # 捕获输出
-        stdout_buffer = io.StringIO()
-        stderr_buffer = io.StringIO()
+        output_buffer = io.StringIO()
+        error_buffer = io.StringIO()
         
         try:
-            with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-                # 使用 exec 执行代码
-                exec(code, exec_globals, self._locals)
-            
-            # 更新持久化环境
-            self._globals.update({k: v for k, v in exec_globals.items() 
-                                 if not k.startswith('_') and k not in ['exec', 'eval']})
-            
-            # 获取最后一行表达式的值（如果有）
-            output = None
-            if code.strip() and not code.strip().endswith(')'):
-                try:
-                    last_line = code.strip().split('\n')[-1]
-                    if not last_line.startswith(('def ', 'class ', 'import ', 'from ', 'if ', 'for ', 'while ', 'with ', 'try:', '@')):
-                        output = eval(last_line, self._globals, self._locals)
-                except:
-                    pass
-            
-            # 获取页面状态
-            page_state = self._capture_page_state()
-            
+            with redirect_stdout(output_buffer), redirect_stderr(error_buffer):
+                # 启动 Playwright
+                self._pw = sync_playwright().start()
+                
+                # 如果提供了调试端口，连接到现有 Chrome
+                if debug_port:
+                    self._browser = self._pw.chromium.connect_over_cdp(f"http://localhost:{debug_port}")
+                    self._context = self._browser.contexts[0] if self._browser.contexts else self._browser.new_context()
+                    # 连接到已有 Chrome 时，使用已有页面而不是新建
+                    if self._context.pages:
+                        self._page = self._context.pages[0]
+                        print(f"[连接成功] 使用已有页面: {self._page.url}")
+                    else:
+                        self._page = self._context.new_page()
+                        print(f"[连接成功] 新建页面: {self._page}")
+                else:
+                    self._browser = self._pw.chromium.launch(headless=headless)
+                    self._context = self._browser.new_context(
+                        viewport={"width": 1920, "height": 1080}
+                    )
+                    self._page = self._context.new_page()
+                
+                # 【关键】直接把对象塞进 locals 字典，代码就能访问了
+                self.locals["page"] = self._page
+                self.locals["browser"] = self._browser
+                self.locals["context"] = self._context
+                self.locals["p"] = self._pw
+                
+                self._initialized = True
+                print(f"[初始化成功] Browser: {self._browser}, Page: {self._page}")
+                
             return ExecutionResult(
                 success=True,
-                stdout=stdout_buffer.getvalue(),
-                stderr=stderr_buffer.getvalue(),
-                output=output,
-                execution_time=time.time() - start_time,
-                page_state=page_state
+                stdout=output_buffer.getvalue(),
+                stderr=error_buffer.getvalue(),
+                execution_time=time.time() - start_time
             )
             
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+            error_msg = traceback.format_exc()
             return ExecutionResult(
                 success=False,
-                stdout=stdout_buffer.getvalue(),
-                stderr=stderr_buffer.getvalue(),
-                error=error_msg,
+                stdout=output_buffer.getvalue(),
+                stderr=f"{error_buffer.getvalue()}\n{error_msg}",
+                error=str(e),
                 execution_time=time.time() - start_time
             )
     
+    def execute(self, code: str) -> ExecutionResult:
+        """
+        使用 exec 在持久化的 locals 命名空间中执行代码
+        """
+        output_buffer = io.StringIO()
+        error_buffer = io.StringIO()
+        
+        # 确保 code 结尾有换行，防止某些语法解析错误
+        if not code.endswith('\n'):
+            code += '\n'
+        
+        # 【注入快捷变量】确保关键对象在 locals 中可用
+        # 这样 Agent 可以直接使用 page, context, browser 等变量
+        if self._page:
+            self.locals["page"] = self._page
+        if self._context:
+            self.locals["context"] = self._context
+        if self._browser:
+            self.locals["browser"] = self._browser
+        if self._pw:
+            self.locals["p"] = self._pw
+
+        try:
+            # 捕获所有输出
+            with redirect_stdout(output_buffer), redirect_stderr(error_buffer):
+                # 【核心修改】
+                # 使用 exec 而不是 runsource
+                # 第一个参数是代码，第二个是全局变量，第三个是局部变量
+                # 在这里我们全部指向 self.locals，实现变量在多次执行间累积
+                exec(code, self.locals, self.locals)
+                
+            return ExecutionResult(
+                success=True,
+                stdout=output_buffer.getvalue(),
+                stderr=error_buffer.getvalue()
+            )
+            
+        except Exception:
+            # 捕获执行期的真实异常
+            error_msg = traceback.format_exc()
+            return ExecutionResult(
+                success=False,
+                stdout=output_buffer.getvalue(),
+                stderr=f"{error_buffer.getvalue()}\n{error_msg}",
+                error=error_msg
+            )
+            
     def _capture_page_state(self) -> Optional[Dict[str, Any]]:
         """捕获当前页面状态"""
         try:
-            page = self._globals.get('page')
+            page = self.locals.get('page')
             if page and hasattr(page, 'url'):
                 return {
                     'url': page.url,
@@ -182,25 +176,21 @@ print(f"[初始化成功] Browser: {browser}, Page: {page}")
     
     def get_page(self) -> Optional[Any]:
         """获取当前 page 对象"""
-        return self._globals.get('page')
+        return self.locals.get('page')
     
     def get_browser(self) -> Optional[Any]:
         """获取当前 browser 对象"""
-        return self._globals.get('browser')
+        return self.locals.get('browser')
     
     def close(self) -> None:
         """关闭浏览器，清理资源"""
         try:
-            browser = self._globals.get('browser')
-            p = self._globals.get('p')
-            
-            if browser:
-                browser.close()
-            if p:
-                p.stop()
+            if self._browser:
+                self._browser.close()
+            if self._pw:
+                self._pw.stop()
                 
-            self._globals.clear()
-            self._locals.clear()
+            self.locals.clear()
             self._initialized = False
             
         except Exception as e:

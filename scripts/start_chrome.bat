@@ -1,16 +1,16 @@
 @echo off
 chcp 65001 >nul
-title MacroChromeMCP - Chrome 启动器
+title WebClaw - Chrome 启动器
 
 :: ============================================
-:: MacroChromeMCP Chrome 启动脚本
+:: WebClaw Chrome 启动脚本
 :: 启动带远程调试端口的 Chrome，供 Playwright 连接
 :: ============================================
 
 echo.
 echo  ╔══════════════════════════════════════════════════════════╗
 echo  ║                                                          ║
-echo  ║           🚀 MacroChromeMCP Chrome 启动器                ║
+echo  ║           🚀 WebClaw Chrome 启动器                       ║
 echo  ║                                                          ║
 echo  ║   正在启动支持 AI 控制的浏览器...                         ║
 echo  ║                                                          ║
@@ -22,7 +22,7 @@ set "DEBUG_PORT=9222"
 
 :: 用户数据目录设置
 :: 使用独立配置（推荐）：干净环境，不与普通 Chrome 冲突
-set "USER_DATA_DIR=%LOCALAPPDATA%\MacroChromeMCP\ChromeProfile"
+set "USER_DATA_DIR=%LOCALAPPDATA%\WebClaw\ChromeProfile"
 
 :: 如需使用默认 Chrome 配置（保留书签、插件、登录状态），取消下面这行的注释：
 :: set "USER_DATA_DIR=%LOCALAPPDATA%\Google\Chrome\User Data"
@@ -83,7 +83,7 @@ echo.
 
 :: 启动 Chrome（带调试端口）
 :: 注意：start 命令会立即返回，所以不能用 ERRORLEVEL 判断
-start "MacroChromeMCP Chrome" "%CHROME_PATH%" ^
+start "WebClaw Chrome" "%CHROME_PATH%" ^
     --remote-debugging-port=%DEBUG_PORT% ^
     --user-data-dir="%USER_DATA_DIR%" ^
     --no-first-run ^

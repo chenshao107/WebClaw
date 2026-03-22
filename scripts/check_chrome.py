@@ -99,7 +99,7 @@ def main():
     args = parser.parse_args()
     
     print("=" * 60)
-    print("  MacroChromeMCP - Chrome 调试端口检查工具")
+    print("  WebClaw - Chrome 调试端口检查工具")
     print("=" * 60)
     print()
     

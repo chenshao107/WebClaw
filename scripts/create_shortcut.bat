@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
-title MacroChromeMCP - 创建桌面快捷方式
+title WebClaw - 创建桌面快捷方式
 
 echo.
 echo ╔══════════════════════════════════════════════════════════╗
 echo ║                                                          ║
-echo ║        🔗 创建 MacroChromeMCP 桌面快捷方式               ║
+echo ║        🔗 创建 WebClaw 桌面快捷方式                      ║
 echo ║                                                          ║
 echo ╚══════════════════════════════════════════════════════════╝
 echo.
@@ -24,7 +24,7 @@ if not exist "%TARGET_BAT%" (
 
 :: 设置快捷方式路径
 set DESKTOP_DIR=%USERPROFILE%\Desktop
-set SHORTCUT_NAME=MacroChromeMCP Chrome.lnk
+set SHORTCUT_NAME=WebClaw Chrome.lnk
 set SHORTCUT_PATH=%DESKTOP_DIR%\%SHORTCUT_NAME%
 
 echo [信息] 正在创建快捷方式...
@@ -48,7 +48,7 @@ echo   📌 快捷方式位置:
 echo      %SHORTCUT_PATH%
 echo.
 echo   💡 使用方法:
-echo      1. 双击桌面上的 "MacroChromeMCP Chrome" 图标
+echo      1. 双击桌面上的 "WebClaw Chrome" 图标
 echo      2. 等待 Chrome 启动完成
 echo      3. 正常使用浏览器
 echo      4. 在 Cursor 中调用 MCP 工具控制浏览器

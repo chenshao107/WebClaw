@@ -1,5 +1,5 @@
 """
-MacroChromeMCP 核心逻辑层
+WebClaw 核心逻辑层
 
 包含代码解释器、Agent 编排和 Prompt 管理
 """

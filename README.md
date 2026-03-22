@@ -1,53 +1,110 @@
 
-## 🏗️ MacroChromeMCP 核心方案架构
+# 🦅 WebClaw - AI 驱动的浏览器自动化智能体
 
-项目通过 **MCP (Model Context Protocol)** 作为粘合剂，将整个系统分为三个层级：
-
-### 1. 顶层：Planner (主决策者)
-
-* **角色：** 任意支持 MCP 的大模型（如 Claude 3.5, GPT-4o）。
-* **职责：** 理解用户的自然语言需求，将其拆解为若干个“宏任务（Macro Tasks）”。
-* **交互：** 它不直接看网页源码，只负责给下级发号施令。
-* **优势：** 彻底隔离低密度信息，**上下文消耗降低 90% 以上**。
-
-### 2. 中间层：Executor Agent (执行特种兵)
-
-* **角色：** 一个具备 **Python 代码解释器** 能力的专门 Agent。
-* **能力：**
-* **写代码：** 根据宏任务指令，现场编写 Playwright 脚本。
-* **自修复：** 运行报错时（如选择器变了），它会读取报错信息并重新写代码尝试，直到成功。
-* **信息提炼：** 执行完复杂操作后，只把结果（截图、关键文本、状态）返回给顶层。
-
-
-* **环境：** 建议运行在 **WSL2** 中，通过远程调试端口控制 Windows 宿主机的 Chrome。
-
-### 3. 底层：Playwright (物理执行器)
-
-* **角色：** 浏览器控制驱动。
-* **能力：** 负责所有物理操作（点击、拖拽、多标签页切换、网络拦截、PDF 导出等）。
-* **优势：** 工业级稳定性，支持自动等待和无障碍树解析，远强于简单的脚本注入。
+WebClaw 是一个**AI Agent**接管的浏览器自动化操作框架。用自然语言描述任务，AI 自动规划、编写代码、执行操作、自我修复。
 
 ---
 
-## 🔄 核心工作流：从指令到结果
+## 🚀 快速开始
 
-1. **任务下发：** Planner 通过 MCP 调用 `execute_macro("去 B 站搜索三体并返回第一个视频的播放量")`。
-2. **代码生成：** Executor Agent 生成一段 Python 代码，利用 Playwright 导航、搜索、并定位元素。
-3. **循环执行：** * 运行代码 -> 获取 DOM 片段 -> 提取数据。
-* 如果中间遇到弹窗拦截，Executor 会自主编写代码“点掉”弹窗，无需 Planner 介入。
+```bash
+# 1. 安装依赖
+pip install -r requirements.txt
 
+# 2. 配置 API Key
+cp .env.example .env
+# 编辑 .env，填入你的 OPENAI_API_KEY
 
-4. **结果收敛：** Executor 完成任务，返回：`{"play_count": "1.2亿", "status": "done"}`。
+# 3. 启动浏览器
+scripts\start_chrome.bat
+
+# 4. 运行 WebClaw CLI
+python webclaw_cli.py
+```
 
 ---
 
-## 🛠️ 为什么这个方案能“降维打击”传统 MCP？
+## 🏗️ 架构：AI Agent 三层设计
 
-| 特性 | 传统 Chrome MCP | **MacroChromeMCP (我们的方案)** |
+WebClaw 将浏览器自动化抽象为**智能体协作**问题，而非简单的脚本执行：
+
+### 1. 🤖 Executor Agent (核心智能体)
+
+**这是 WebClaw 的灵魂。**
+
+* **自主规划：** 接收自然语言任务，自主拆解为可执行步骤
+* **代码生成：** 实时编写 Playwright 脚本，无需人工编写选择器
+* **自我修复：** 遇到报错（元素未找到、弹窗拦截）自动分析并重新生成代码
+* **信息提炼：** 只返回关键结果，过滤网页噪音
+
+### 2. 🧠 LLM 神经中枢
+
+* **模型兼容：** 支持 OpenAI、DeepSeek、Gemini 等任意 OpenAI 兼容接口
+* **上下文优化：** 通过分层架构，**Token 消耗降低 90% 以上**
+
+### 3. 🎮 Playwright 物理层
+
+* **工业级稳定：** 自动等待、无障碍树解析、网络拦截
+* **多标签页：** 跨页面、跨会话的复杂工作流
+
+---
+
+## 🔄 工作流示例
+
+```
+用户: "新开一个标签页，去github看看当 下最火的AI项目都有哪"
+
+WebClaw Agent:
+  ↓ 分析任务意图
+  ↓ 生成 Playwright 代码（导航→搜索→提取）
+  ↓ 执行
+  ↓ 返回
+```
+
+---
+
+## 🔌 MCP 支持（可选）
+
+WebClaw 同时提供 **MCP (Model Context Protocol)** 服务接口，方便集成到 Cursor、Claude Desktop 等支持 MCP 的客户端：
+
+```json
+{
+  "mcpServers": {
+    "webclaw": {
+      "command": "python",
+      "args": ["-m", "server.mcp_server"]
+    }
+  }
+}
+```
+
+> **注意：** MCP 是连接层，核心能力始终是 Executor Agent。
+
+---
+
+## 🛠️ vs 传统方案
+
+| 特性 | 传统 Chrome MCP | **WebClaw** |
 | --- | --- | --- |
-| **交互频率** | 极高（每一步点击都要 Planner 决策） | **极低（一次任务一次交互）** |
-| **容错能力** | 差（Planner 容易被网页干扰信息带偏） | **极强（Executor 在局部循环中自愈）** |
-| **操作极限** | 仅限单页微操 | **跨标签页、跨会话、复杂业务流** |
-| **Token 成本** | 随网页复杂度线性爆炸 | **常数级成本（只传输指令和摘要）** |
+| **核心定位** | 远程控制浏览器 | **AI Agent 自主决策** |
+| **交互频率** | 极高（每步都需 Planner 决策） | **极低（一次任务一次交互）** |
+| **容错能力** | 差（容易被网页变化打断） | **极强（Agent 自愈循环）** |
+| **使用方式** | 写代码/配选择器 | **自然语言即可** |
+| **Token 成本** | 随页面复杂度爆炸 | **常数级（只传摘要）** |
+
+---
+
+## 📁 项目结构
+
+```
+webclaw_cli.py      # 🎯 主入口：AI Agent CLI 交互
+server/             # MCP 服务接口（可选）
+core/               # Agent 核心逻辑
+  ├── agent.py      # Executor Agent
+  ├── interpreter.py # Code Interpreter
+  └── llm_provider.py
+tools/              # 工具集（可扩展）
+scripts/            # Chrome 启动脚本
+```
 
 ---

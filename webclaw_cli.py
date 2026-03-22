@@ -1,10 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-import os
-from dotenv import load_dotenv
-
-from core.interpreter import CodeInterpreter  # 修改这里
+from core.interpreter import CodeInterpreter
 from core.llm_provider import LLMProvider
 from core.agent import ExecutorAgent
 from tools.python_executor import PythonExecutorTool
@@ -40,7 +37,7 @@ def main():
     agent = ExecutorAgent(llm=llm, tools=tools)
 
     print("\n╔══════════════════════════════════════════════════════════════╗")
-    print("║             🚀 MacroChrome ReAct 引擎已启动                  ║")
+    print("║             🚀 WebClaw AI Agent 引擎已启动                   ║")
     print("╚══════════════════════════════════════════════════════════════╝")
 
     try:

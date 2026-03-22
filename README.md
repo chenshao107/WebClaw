@@ -11,14 +11,17 @@ WebClaw 是一个**AI Agent**接管的浏览器自动化操作框架。用自然
 # 1. 安装依赖
 pip install -r requirements.txt
 
-# 2. 配置 API Key
+# 2. 安装 Playwright 浏览器（仅需执行一次）
+playwright install chromium
+
+# 3. 配置 API Key
 cp .env.example .env
 # 编辑 .env，填入你的 OPENAI_API_KEY
 
-# 3. 启动浏览器
+# 4. 启动浏览器
 scripts\start_chrome.bat
 
-# 4. 运行 WebClaw CLI
+# 5. 运行 WebClaw CLI
 python webclaw_cli.py
 ```
 

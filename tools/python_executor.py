@@ -9,14 +9,35 @@ class PythonExecutorTool(BaseTool):
     def name(self) -> str:
         return "execute_python"
 
+    def _get_tool_descriptions(self) -> str:
+        """动态获取已注册工具的说明"""
+        tools = CodeInterpreter.get_tool_descriptions()
+        if not tools:
+            return ""
+        
+        lines = ["【预置函数】"]
+        for tool in tools:
+            lines.append(f"- {tool['name']}{tool['signature']}: {tool['description']}")
+        return "\n".join(lines)
+
     @property
     def description(self) -> str:
+        tool_section = self._get_tool_descriptions()
+        
         return (
-            "在持久化的 Playwright 环境中执行 Python 代码。环境已预置 'page', 'browser', 'context' 对象。\n"
-            "你可以使用 page.locator(), page.evaluate() 等完整 Playwright API。\n"
-            "注意：\n"
-            "1. 若需返回数据给大模型观察，请使用 print()。\n"
-            "2. 为避免上下文爆炸，若获取网页源码或大段文本，请在代码中先用 BeautifulSoup 等工具做截断或摘要！"
+            "在持久化的 Playwright 环境中执行 Python 代码。环境已预置以下对象和函数：\n"
+            "【预置对象】\n"
+            "- page: 当前页面，可使用 page.goto(), page.locator(), page.evaluate() 等 Playwright API\n"
+            "- context: 浏览器上下文，可使用 context.new_page() 创建新标签页\n"
+            "- browser: 浏览器实例\n"
+            f"{tool_section}\n"
+            "【使用建议】\n"
+            "1. 操作前先调用 list_tabs() 查看可用标签页\n"
+            "2. 获取页面内容时优先使用 capture_snapshot() 而非 page.content()\n"
+            "3. 若需返回数据给大模型观察，请使用 print()\n"
+            "【添加新工具】\n"
+            "如需添加新工具函数，在 tools/ 目录下创建新文件，"
+            "然后在 CodeInterpreter._register_builtin_tools() 中注册即可，无需修改此描述。"
         )
 
     @property

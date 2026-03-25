@@ -24,6 +24,7 @@ except ImportError:
 
 from core.agent import ExecutorAgent
 from core.interpreter import ExecutionResult
+from tools.experience_tools import EXPERIENCE_TOOLS
 
 
 @dataclass
@@ -167,6 +168,22 @@ print(f'{{"status": "success", "path": "{save_path}"}}')
                 "path": save_path if result.success else None,
                 "error": result.error
             }, ensure_ascii=False)
+        
+        # 注册经验管理工具
+        for tool in EXPERIENCE_TOOLS:
+            self._register_experience_tool(tool)
+    
+    def _register_experience_tool(self, tool):
+        """注册单个经验管理工具到 MCP server"""
+        import functools
+        
+        @self.server.tool(name=tool.name)
+        @functools.wraps(tool.execute)
+        async def wrapper(**kwargs):
+            return tool.execute(**kwargs)
+        
+        # 保留工具描述
+        wrapper.__doc__ = tool.description
     
     async def run(self, transport: str = "stdio"):
         """
@@ -264,6 +281,80 @@ print(f'{{"status": "success", "path": "{save_path}"}}')
                             "default": "screenshot.png"
                         }
                     }
+                }
+            ),
+            # 经验管理工具
+            MCPToolDefinition(
+                name="record_experience",
+                description="记录一条新的操作经验到知识库中，供未来类似任务参考",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": "经验主题，如 'GitHub 登录流程'"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "经验具体内容"
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "关键词标签"
+                        },
+                        "domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "适用网站域名"
+                        }
+                    },
+                    "required": ["topic", "content"]
+                }
+            ),
+            MCPToolDefinition(
+                name="mark_experience_outdated",
+                description="将一条经验标记为过时或失效",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "exp_id": {
+                            "type": "integer",
+                            "description": "经验 ID"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "过时原因"
+                        }
+                    },
+                    "required": ["exp_id", "reason"]
+                }
+            ),
+            MCPToolDefinition(
+                name="search_experiences",
+                description="搜索知识库中的历史经验",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "keywords": {
+                            "type": "string",
+                            "description": "搜索关键词"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "返回条数限制",
+                            "default": 5
+                        }
+                    },
+                    "required": ["keywords"]
+                }
+            ),
+            MCPToolDefinition(
+                name="get_experience_stats",
+                description="获取经验知识库的统计信息",
+                parameters={
+                    "type": "object",
+                    "properties": {}
                 }
             )
         ]

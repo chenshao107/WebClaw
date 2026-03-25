@@ -1,16 +1,23 @@
 import json
+import os
 import re
 from typing import List, Dict, Any
 from datetime import datetime
 from core.llm_provider import LLMProvider
 from core.task_logger import TaskLogger
+from core.experience_store import ExperienceStore, get_experience_store
 from tools.base import BaseTool
 
+# 从环境变量读取配置，默认25步
+DEFAULT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '25'))
+
 class ExecutorAgent:
-    def __init__(self, llm: LLMProvider, tools: List[BaseTool]):
+    def __init__(self, llm: LLMProvider, tools: List[BaseTool], enable_experience: bool = True):
         self.llm = llm
         self.tools = {tool.name: tool for tool in tools}
         self.tool_schemas = [tool.to_openai_format() for tool in tools]
+        self.enable_experience = enable_experience
+        self.experience_store: ExperienceStore = get_experience_store() if enable_experience else None
         
         self.system_prompt = """你是一个顶级的浏览器自动化特种兵。
 你被连接到了一个真实的 Windows Chrome 浏览器上。
@@ -26,7 +33,12 @@ class ExecutorAgent:
 
 【防上下文爆炸警告】
 绝不要直接 print(page.content())！
-如果你需要分析页面结构，请在 Python 代码中使用 lxml 或 BeautifulSoup 提取核心可见元素的 innerText，或者精简 DOM，只 print 你最关心的那部分。"""
+如果你需要分析页面结构，请在 Python 代码中使用 lxml 或 BeautifulSoup 提取核心可见元素的 innerText，或者精简 DOM，只 print 你最关心的那部分。
+
+【经验学习机制】
+- 如果历史经验对你有帮助，请在回复中提及
+- 如果发现新技巧或旧经验有误，任务结束后可以调用相关工具记录
+- 持续优化你的执行策略"""
 
         self.history = [{"role": "system", "content": self.system_prompt}]
         self.current_task_logger: TaskLogger = None
@@ -38,11 +50,49 @@ class ExecutorAgent:
         timestamp = datetime.now().strftime("%H%M%S")
         return f"{short_desc}_{timestamp}"
 
-    def run_task(self, task_description: str, max_steps: int = 15):
+    def _build_system_prompt_with_experiences(self, task_description: str) -> str:
+        """构建包含相关经验的系统提示"""
+        base_prompt = self.system_prompt
+        
+        if not self.enable_experience or not self.experience_store:
+            return base_prompt
+        
+        # 从任务描述中提取域名（简单启发式）
+        domain = None
+        url_match = re.search(r'https?://([^/\s]+)', task_description)
+        if url_match:
+            domain = url_match.group(1)
+        
+        # 检索相关经验
+        experiences = self.experience_store.retrieve(
+            context=task_description,
+            limit=3,
+            domain_filter=domain
+        )
+        
+        if not experiences:
+            return base_prompt
+        
+        # 构建经验提示
+        exp_text = "\n\n【相关历史经验】\n"
+        for i, exp in enumerate(experiences, 1):
+            exp_text += f"\n--- 经验 {i} ---"
+            exp_text += exp.to_prompt_text()
+        
+        return base_prompt + exp_text
+
+    def run_task(self, task_description: str, max_steps: int = None):
+        # 使用默认值（从环境变量读取）
+        if max_steps is None:
+            max_steps = DEFAULT_MAX_STEPS
         # 1. 为本次任务创建新的日志记录器
         task_id = self._generate_task_id(task_description)
         self.current_task_logger = TaskLogger(task_id=task_id)
         self.llm.set_task_logger(self.current_task_logger)
+        
+        # 2. 构建包含经验的系统提示
+        system_prompt = self._build_system_prompt_with_experiences(task_description)
+        self.history = [{"role": "system", "content": system_prompt}]
         
         self.history.append({"role": "user", "content": task_description})
         print(f"\n🚀 [Agent 接管任务] {task_description}")

@@ -1,5 +1,5 @@
 """
-MacroChromeMCP 脚本工具包
+WebClaw 脚本工具包
 
 包含：
 - start_chrome.bat: 启动带调试端口的 Chrome

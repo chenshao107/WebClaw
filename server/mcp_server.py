@@ -301,7 +301,7 @@ def create_server(
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="MacroChromeMCP 服务器")
+    parser = argparse.ArgumentParser(description="WebClaw MCP 服务器")
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--debug-port", type=int, help="Chrome 调试端口")
     parser.add_argument("--transport", default="stdio", choices=["stdio", "sse"], help="传输方式")
@@ -317,7 +317,7 @@ if __name__ == "__main__":
         llm_model=args.llm_model
     )
     
-    print(f"[MacroChromeMCP] 启动服务器...")
+    print(f"[WebClaw] 启动服务器...")
     print(f"  - 传输方式: {args.transport}")
     print(f"  - 无头模式: {args.headless}")
     print(f"  - 调试端口: {args.debug_port or '未启用'}")

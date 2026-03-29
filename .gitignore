@@ -64,3 +64,18 @@ Thumbs.db
 
 # 项目特定
 debug_screenshot.png
+
+# 数据文件（经验数据库等）
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# 临时输出文件
+*.json
+*.txt
+!requirements.txt
+!LICENSE
+
+# Cursor/Qoder 配置
+.qoder/

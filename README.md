@@ -68,20 +68,104 @@ WebClaw Agent:
 
 ## 🔌 MCP 支持（可选）
 
-WebClaw 同时提供 **MCP (Model Context Protocol)** 服务接口，方便集成到 Cursor、Claude Desktop 等支持 MCP 的客户端：
+WebClaw 提供 **渐进式 MCP 工具集**，可集成到 Cursor、Claude Desktop 等支持 MCP 的客户端。
+
+### 特性
+
+- **渐进式披露**：初始只显示极简描述，调用 `browser_help` 获取完整文档
+- **灵活配置**：可开关任意工具（help / execute_python / agent_task / experience）
+- **预封装函数**：`execute_python` 环境内置常用浏览器操作函数
+
+### Cursor 配置
+
+**方式一：图形界面配置**
+
+1. 打开 Cursor Settings → Features → MCP
+2. 点击 "Add New MCP Server"
+3. 填写配置：
+   - **Name**: `webclaw`
+   - **Type**: `command`
+   - **Command**: `D:\\你的路径\\WebClaw\\venv\\Scripts\\python.exe`（使用虚拟环境 Python）
+   - **Args**: `D:\\你的路径\\WebClaw\\server\\mcp_server.py --transport stdio`
+
+**方式二：手动编辑配置文件**
+
+编辑 `%USERPROFILE%\.cursor\mcp.json`：
 
 ```json
 {
   "mcpServers": {
     "webclaw": {
-      "command": "python",
-      "args": ["-m", "server.mcp_server"]
+      "command": "D:\\\\Documents\\\\Project\\\\WebClaw\\\\venv\\\\Scripts\\\\python.exe",
+      "args": [
+        "D:\\\\Documents\\\\Project\\\\WebClaw\\\\server\\\\mcp_server.py",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "PYTHONPATH": "D:\\\\Documents\\\\Project\\\\WebClaw"
+      }
     }
   }
 }
 ```
 
-> **注意：** MCP 是连接层，核心能力始终是 Executor Agent。
+> **注意**：必须使用虚拟环境的 `python.exe`，否则找不到依赖包。
+
+### 工具清单
+
+| 工具 | 描述 | 可禁用 |
+|------|------|--------|
+| `browser_help` | 获取完整帮助信息和浏览器当前状态 | `--no-help` |
+| `execute_python` | 执行 Python 代码操控浏览器 | `--no-python` |
+| `agent_task` | 自然语言任务，由 Agent 自动执行 | `--no-agent` |
+| `record_experience` | 记录操作经验到知识库 | `--no-experience` |
+
+### 预封装函数（execute_python 环境可用）
+
+```python
+get_page_summary()           # 获取页面摘要（URL、标题、元素统计）
+find_elements(selector, n)   # 查找元素并显示信息
+click_element(selector, i)   # 点击第 i 个匹配元素
+fill_form(selector, value)   # 填充表单
+wait_and_capture(ms)         # 等待并捕获页面状态
+extract_links(pattern)       # 提取链接（可正则过滤）
+smart_scroll(dir, amount)    # 智能滚动（down/up/bottom/top）
+list_prebuilt_funcs()        # 列出所有可用函数
+```
+
+### 使用流程
+
+```
+Planner (Cursor) 看到极简描述:
+  - browser_help: "获取完整帮助信息和浏览器当前状态"
+  - execute_python: "执行 Python 代码操控浏览器（调用 help 查看详情）"
+
+  ↓ 调用 browser_help()
+  
+  返回完整信息:
+    - 浏览器当前 URL、标题
+    - 完整工具文档
+    - 预封装函数列表
+    
+  ↓ 根据需求选择工具
+  
+  简单操作 → execute_python(code="get_page_summary()")
+  复杂任务 → agent_task(task="去 GitHub 搜索...")
+```
+
+### 测试 MCP 连接
+
+```bash
+# 查看配置指南
+python test_mcp.py --cursor-config
+
+# 运行所有测试
+python test_mcp.py --test-all
+
+# 启动 MCP 服务器（独立测试）
+python test_mcp.py --server --transport stdio
+```
 
 ---
 

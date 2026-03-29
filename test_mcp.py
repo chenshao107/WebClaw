@@ -171,41 +171,42 @@ def print_cursor_config():
         python_cmd = "python"
         print(f"\n⚠ 未检测到虚拟环境，使用系统 python")
     
-    config = {
+    sse_config = {
         "mcpServers": {
             "webclaw": {
-                "command": python_cmd,
-                "args": [
-                    str(project_path / "server" / "mcp_server.py"),
-                    "--transport", "stdio"
-                ],
-                "env": {
-                    "PYTHONPATH": str(project_path)
-                }
+                "url": "http://127.0.0.1:8765/sse"
             }
         }
     }
     
-    print("\n1. 打开 Cursor Settings → Features → MCP")
-    print("2. 点击 'Add New MCP Server'")
-    print("3. 填写配置:")
-    print(f"   - Name: webclaw")
-    print(f"   - Type: command")
-    print(f"   - Command: {python_cmd}")
-    print(f"   - Args: {project_path / 'server' / 'mcp_server.py'} --transport stdio")
-    print("\n或者手动编辑 ~/.cursor/mcp.json:")
-    print(json.dumps(config, indent=2, ensure_ascii=False))
+    print("\n" + "=" * 60)
+    print("WebClaw MCP SSE 模式配置")
+    print("=" * 60)
     
-    print("\n4. 配置选项（可选）:")
+    print("\n【步骤 1】启动 MCP 服务器:")
+    print(f"   cd {project_path}")
+    print(f"   python server/mcp_server.py --transport sse --port 8765")
+    
+    print("\n【步骤 2】配置 Cursor:")
+    print("   1. 打开 Cursor Settings → Features → MCP")
+    print("   2. 点击 'Add New MCP Server'")
+    print("   3. 填写配置:")
+    print(f"      - Name: webclaw")
+    print(f"      - Type: url")
+    print(f"      - URL: http://127.0.0.1:8765/sse")
+    
+    print("\n   或者手动编辑 ~/.cursor/mcp.json:")
+    print(json.dumps(sse_config, indent=2, ensure_ascii=False))
+    
+    print("\n【可选配置】")
+    print("   --host 127.0.0.1 : 绑定主机地址")
+    print("   --port 8765      : 绑定端口")
+    print("   --headless       : 无头模式")
+    print("   --debug-port 9222: 连接现有 Chrome")
     print("   --no-help        : 禁用 browser_help")
     print("   --no-python      : 禁用 execute_python")
     print("   --no-agent       : 禁用 agent_task")
     print("   --no-experience  : 禁用经验管理")
-    
-    print(f"\n5. 验证安装:")
-    print(f"   cd {project_path}")
-    print(f"   .\\venv\\Scripts\\python.exe -c \"import mcp; print('MCP OK')\"")
-    print("   --llm deepseek   : 使用 DeepSeek LLM")
 
 
 def main():

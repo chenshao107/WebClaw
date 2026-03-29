@@ -7,6 +7,8 @@ WebClaw 是一个**AI Agent**接管的浏览器自动化操作框架。用自然
 
 ## 🚀 快速开始
 
+### 方式一：CLI 模式（独立运行）
+
 ```bash
 # 1. 安装依赖
 pip install -r requirements.txt
@@ -23,6 +25,21 @@ scripts\start_chrome.bat
 
 # 5. 运行 WebClaw CLI
 python webclaw_cli.py
+```
+
+### 方式二：MCP 模式（推荐，集成到 Cursor/Claude）
+
+```bash
+# 1. 安装（同上步骤 1-3）
+
+# 2. 启动 MCP 服务器（SSE 模式）
+start_mcp_server.bat
+# 或: python server/mcp_server.py --transport sse
+
+# 3. 配置 MCP 客户端
+# 复制 mcp_config.json 的内容到你的 IDE MCP 配置
+# Cursor: Settings → Features → MCP → Add New MCP Server
+# Type: url, URL: http://127.0.0.1:8765/sse
 ```
 
 ---
@@ -72,45 +89,43 @@ WebClaw 提供 **渐进式 MCP 工具集**，可集成到 Cursor、Claude Deskto
 
 ### 特性
 
+- **SSE 服务器模式**：支持状态持久化，多次调用共享浏览器会话
 - **渐进式披露**：初始只显示极简描述，调用 `browser_help` 获取完整文档
 - **灵活配置**：可开关任意工具（help / execute_python / agent_task / experience）
 - **预封装函数**：`execute_python` 环境内置常用浏览器操作函数
 
-### Cursor 配置
+### 快速配置
 
-**方式一：图形界面配置**
+**1. 启动 MCP 服务器**
 
-1. 打开 Cursor Settings → Features → MCP
-2. 点击 "Add New MCP Server"
-3. 填写配置：
-   - **Name**: `webclaw`
-   - **Type**: `command`
-   - **Command**: `D:\\你的路径\\WebClaw\\venv\\Scripts\\python.exe`（使用虚拟环境 Python）
-   - **Args**: `D:\\你的路径\\WebClaw\\server\\mcp_server.py --transport stdio`
+```bash
+# 方式一：使用脚本启动（推荐）
+python server/mcp_server.py --transport sse --port 8765
 
-**方式二：手动编辑配置文件**
+# 方式二：后台运行（Linux/Mac）
+nohup python server/mcp_server.py --transport sse --port 8765 > mcp.log 2>&1 &
+```
 
-编辑 `%USERPROFILE%\.cursor\mcp.json`：
+**2. 配置 MCP 客户端**
+
+编辑 `mcp_config.json`（项目根目录）：
 
 ```json
 {
   "mcpServers": {
     "webclaw": {
-      "command": "D:\\Documents\\Project\\WebClaw\\venv\\Scripts\\python.exe",
-      "args": [
-        "D:\\Documents\\Project\\WebClaw\\server\\mcp_server.py",
-        "--transport",
-        "stdio"
-      ],
-      "env": {
-        "PYTHONPATH": "D:\\Documents\\Project\\WebClaw"
-      }
+      "url": "http://127.0.0.1:8765/sse"
     }
   }
 }
 ```
 
-> **注意**：必须使用虚拟环境的 `python.exe`，否则找不到依赖包。
+或在 Cursor 中配置：
+- 打开 Cursor Settings → Features → MCP
+- 点击 "Add New MCP Server"
+- **Name**: `webclaw`
+- **Type**: `url`
+- **URL**: `http://127.0.0.1:8765/sse`
 
 ### 工具清单
 
@@ -124,6 +139,7 @@ WebClaw 提供 **渐进式 MCP 工具集**，可集成到 Cursor、Claude Deskto
 ### 预封装函数（execute_python 环境可用）
 
 ```python
+# 页面操作
 get_page_summary()           # 获取页面摘要（URL、标题、元素统计）
 find_elements(selector, n)   # 查找元素并显示信息
 click_element(selector, i)   # 点击第 i 个匹配元素
@@ -131,40 +147,63 @@ fill_form(selector, value)   # 填充表单
 wait_and_capture(ms)         # 等待并捕获页面状态
 extract_links(pattern)       # 提取链接（可正则过滤）
 smart_scroll(dir, amount)    # 智能滚动（down/up/bottom/top）
+
+# 标签页管理
+new_tab(url)                 # 新开标签页
+switch_tab(index)            # 切换到指定标签页
+list_tabs()                  # 列出所有标签页
+close_tab(index)             # 关闭标签页
+
+# 其他
 list_prebuilt_funcs()        # 列出所有可用函数
 ```
 
 ### 使用流程
 
 ```
-Planner (Cursor) 看到极简描述:
-  - browser_help: "获取完整帮助信息和浏览器当前状态"
-  - execute_python: "执行 Python 代码操控浏览器（调用 help 查看详情）"
+1. 启动 MCP 服务器（SSE 模式）
+   python server/mcp_server.py --transport sse
 
-  ↓ 调用 browser_help()
-  
-  返回完整信息:
-    - 浏览器当前 URL、标题
-    - 完整工具文档
-    - 预封装函数列表
-    
-  ↓ 根据需求选择工具
-  
-  简单操作 → execute_python(code="get_page_summary()")
-  复杂任务 → agent_task(task="去 GitHub 搜索...")
+2. 配置 MCP 客户端指向 SSE URL
+   http://127.0.0.1:8765/sse
+
+3. 开始使用
+   - 调用 browser_help() 获取完整信息
+   - 使用 execute_python(code="get_page_summary()") 执行操作
+   - 多次调用间共享浏览器状态
 ```
 
-### 测试 MCP 连接
+### 服务器参数
 
 ```bash
-# 查看配置指南
-python test_mcp.py --cursor-config
+python server/mcp_server.py [选项]
 
-# 运行所有测试
-python test_mcp.py --test-all
+选项:
+  --transport {stdio,sse}  传输方式（默认: stdio）
+  --host HOST              SSE 模式主机地址（默认: 127.0.0.1）
+  --port PORT              SSE 模式端口（默认: 8765）
+  --headless               无头模式（不显示浏览器窗口）
+  --debug-port PORT        连接现有 Chrome 调试端口
+  --no-help                禁用 browser_help 工具
+  --no-python              禁用 execute_python 工具
+  --no-agent               禁用 agent_task 工具
+  --no-experience          禁用经验管理工具
+```
 
-# 启动 MCP 服务器（独立测试）
-python test_mcp.py --server --transport stdio
+### 环境变量配置
+
+在 `.env` 文件中配置：
+
+```bash
+# MCP 工具开关
+MCP_ENABLE_HELP=true
+MCP_ENABLE_PYTHON=true
+MCP_ENABLE_AGENT=true
+MCP_ENABLE_EXPERIENCE=true
+
+# 浏览器配置
+BROWSER_HEADLESS=false
+BROWSER_DEBUG_PORT=9222
 ```
 
 ---
@@ -185,13 +224,16 @@ python test_mcp.py --server --transport stdio
 
 ```
 webclaw_cli.py      # 🎯 主入口：AI Agent CLI 交互
-server/             # MCP 服务接口（可选）
+server/
+  └── mcp_server.py # MCP 服务接口（SSE 模式）
 core/               # Agent 核心逻辑
   ├── agent.py      # Executor Agent
   ├── interpreter.py # Code Interpreter
   └── llm_provider.py
 tools/              # 工具集（可扩展）
 scripts/            # Chrome 启动脚本
+mcp_config.json     # MCP 客户端配置示例（SSE 模式）
+.env.example        # 环境变量配置模板
 ```
 
 ---

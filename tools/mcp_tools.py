@@ -235,13 +235,15 @@ def close_tab(index: int = None):
     return True
 
 
-# 初始化时打印可用函数
-print("=" * 50)
-print("浏览器自动化环境已就绪")
-print("全局变量: page (当前页面)")
-print("预封装函数:")
-list_prebuilt_funcs()
-print("=" * 50)
+# 初始化时打印可用函数（使用全局变量确保只打印一次）
+if '_webclaw_initialized' not in globals():
+    print("=" * 50)
+    print("浏览器自动化环境已就绪")
+    print("全局变量: page (当前页面), context (浏览器上下文)")
+    print("预封装函数:")
+    list_prebuilt_funcs()
+    print("=" * 50)
+    globals()['_webclaw_initialized'] = True
 '''
 
 
@@ -433,7 +435,25 @@ class ExecutePythonTool(BaseTool):
     
     @property
     def description(self) -> str:
-        return "执行 Python 代码操控浏览器。环境包含 'page' 对象和多个预封装函数。适合精确控制浏览器操作。"
+        return """执行 Python 代码操控浏览器。
+
+环境已预配置：
+- page: Playwright Page 对象（当前页面）
+- context: 浏览器上下文（用于管理标签页）
+
+推荐使用预封装函数（已自动导入）：
+- get_page_summary() - 获取页面摘要（URL、标题、关键元素统计）
+- find_elements(selector, max_count) - 查找元素
+- click_element(selector, index) - 点击元素
+- fill_form(selector, value) - 填充表单
+- new_tab(url) - 新开标签页
+- switch_tab(index) - 切换标签页
+- list_tabs() - 列出所有标签页
+- smart_scroll(direction, amount) - 智能滚动
+- extract_links(pattern) - 提取链接
+- wait_and_capture(timeout) - 等待并捕获状态
+
+只有在预封装函数无法满足需求时，才直接使用 page 对象。"""
     
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -442,7 +462,7 @@ class ExecutePythonTool(BaseTool):
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "Python 代码字符串。可用全局变量: page (Playwright Page)。调用 browser_help 查看预封装函数列表。"
+                    "description": "Python 代码字符串。建议优先使用预封装函数如 get_page_summary()、find_elements() 等，它们更简洁且已处理常见异常。只有在特殊需求时才直接使用 page 对象。"
                 }
             },
             "required": ["code"]

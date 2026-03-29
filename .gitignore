@@ -20,7 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# 虚拟环境
+# Virtual environments
 venv/
 ENV/
 env/
@@ -33,16 +33,16 @@ env/
 *.swo
 *~
 
-# 环境变量
+# Environment variables
 .env
 .env.local
 .env.*.local
 
-# 日志
+# Logs
 *.log
 logs/
 
-# 截图和下载文件
+# Screenshots and downloads
 *.png
 *.jpg
 *.jpeg
@@ -53,29 +53,31 @@ screenshots/
 # Playwright
 .playwright/
 
-# 测试
+# Testing
 .pytest_cache/
 .coverage
 htmlcov/
 
-# 系统文件
+# System files
 .DS_Store
 Thumbs.db
 
-# 项目特定
+# Project specific
 debug_screenshot.png
 
-# 数据文件（经验数据库等）
+# Data files (experience database, etc.)
 data/
 *.db
 *.sqlite
 *.sqlite3
 
-# 临时输出文件
+# Temporary output files
 *.json
+!mcp_config.json
+my_mcp_config.json
 *.txt
 !requirements.txt
 !LICENSE
 
-# Cursor/Qoder 配置
+# Cursor/Qoder config
 .qoder/

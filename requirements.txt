@@ -1,35 +1,35 @@
-# WebClaw 项目依赖
+# WebClaw Dependencies
 
-# MCP 协议支持
+# MCP Protocol
 mcp>=1.0.0
 
-# 浏览器自动化
+# Browser Automation
 playwright>=1.40.0
 
-# LLM 客户端
+# LLM Clients
 anthropic>=0.18.0
 openai>=1.12.0
 
-# 工具依赖
+# Utilities
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
 python-dotenv>=1.0.0
 
-# 常用HTTP/网络库
+# HTTP/Network
 requests>=2.31.0
 aiohttp>=3.9.0
 urllib3>=2.0.0
 
-# 数据处理/解析
+# Data Processing
 pandas>=2.0.0
 numpy>=1.24.0
 
-# 日期时间处理
+# Date/Time
 python-dateutil>=2.8.0
 
-# 正则/文本处理
+# Text Processing
 regex>=2023.0.0
 
-# 开发依赖
+# Development
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

@@ -96,14 +96,14 @@ WebClaw 提供 **渐进式 MCP 工具集**，可集成到 Cursor、Claude Deskto
 {
   "mcpServers": {
     "webclaw": {
-      "command": "D:\\\\Documents\\\\Project\\\\WebClaw\\\\venv\\\\Scripts\\\\python.exe",
+      "command": "D:\\Documents\\Project\\WebClaw\\venv\\Scripts\\python.exe",
       "args": [
-        "D:\\\\Documents\\\\Project\\\\WebClaw\\\\server\\\\mcp_server.py",
+        "D:\\Documents\\Project\\WebClaw\\server\\mcp_server.py",
         "--transport",
         "stdio"
       ],
       "env": {
-        "PYTHONPATH": "D:\\\\Documents\\\\Project\\\\WebClaw"
+        "PYTHONPATH": "D:\\Documents\\Project\\WebClaw"
       }
     }
   }

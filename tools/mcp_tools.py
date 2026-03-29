@@ -28,6 +28,8 @@ PREBUILT_FUNCTIONS = '''
 # 预封装函数 - 浏览器自动化常用操作
 # ============================================
 
+import types  # 预导入 types 模块，供 list_prebuilt_funcs 使用
+
 def get_page_summary():
     """获取页面摘要信息（URL、标题、关键元素）"""
     import json
@@ -173,6 +175,66 @@ def list_prebuilt_funcs():
     return funcs
 
 
+def new_tab(url: str = None):
+    """新开一个标签页并返回页面对象"""
+    new_page = context.new_page()
+    if url:
+        new_page.goto(url)
+        new_page.wait_for_load_state("domcontentloaded")
+    print(f"新开标签页: {new_page.url if url else 'about:blank'}")
+    return new_page
+
+
+def switch_tab(index: int = 0):
+    """切换到指定索引的标签页"""
+    global page
+    pages = context.pages
+    if index < 0 or index >= len(pages):
+        print(f"错误: 索引 {index} 超出范围，共有 {len(pages)} 个标签页")
+        return None
+    page = pages[index]
+    print(f"切换到标签页 {index}: {page.url}")
+    return page
+
+
+def list_tabs():
+    """列出所有标签页"""
+    pages = context.pages
+    print(f"共有 {len(pages)} 个标签页:")
+    for i, p in enumerate(pages):
+        marker = "👉 " if p == page else "   "
+        try:
+            title = p.title()[:30] if p.title() else "无标题"
+            url = p.url[:50] if len(p.url) > 50 else p.url
+            print(f"{marker}[{i}] {title} - {url}")
+        except:
+            print(f"{marker}[{i}] 无法获取信息")
+    return pages
+
+
+def close_tab(index: int = None):
+    """关闭指定索引的标签页，默认关闭当前页"""
+    global page
+    pages = context.pages
+    if index is None:
+        target = page
+    else:
+        if index < 0 or index >= len(pages):
+            print(f"错误: 索引 {index} 超出范围")
+            return False
+        target = pages[index]
+    
+    target.close()
+    print(f"已关闭标签页")
+    
+    # 切换到第一个可用标签页
+    remaining = context.pages
+    if remaining:
+        page = remaining[0]
+        print(f"自动切换到: {page.url}")
+    return True
+
+
 # 初始化时打印可用函数
 print("=" * 50)
 print("浏览器自动化环境已就绪")
@@ -309,6 +371,7 @@ class HelpTool(BaseTool):
     def _get_prebuilt_funcs_doc(self) -> str:
         """获取预封装函数文档"""
         docs = """
+【页面操作】
   get_page_summary()           - 获取页面摘要（URL、标题、元素统计）
   find_elements(selector, n)   - 查找元素并显示信息
   click_element(selector, i)   - 点击第 i 个匹配元素
@@ -316,6 +379,14 @@ class HelpTool(BaseTool):
   wait_and_capture(ms)         - 等待并捕获页面状态
   extract_links(pattern)       - 提取链接（可正则过滤）
   smart_scroll(dir, amount)    - 智能滚动（down/up/bottom/top）
+
+【标签页管理】
+  new_tab(url)                 - 新开标签页（可选打开URL）
+  switch_tab(index)            - 切换到指定索引的标签页
+  list_tabs()                  - 列出所有标签页
+  close_tab(index)             - 关闭标签页（默认当前页）
+
+【其他】
   list_prebuilt_funcs()        - 列出所有可用函数
 """
         return docs
@@ -326,11 +397,35 @@ class ExecutePythonTool(BaseTool):
     执行 Python 代码工具
     
     在浏览器环境中执行 Python 代码，预封装常用函数。
+    支持通过工厂函数延迟获取 interpreter，解决 SSE 模式下的初始化问题。
     """
     
-    def __init__(self, config: MCPToolConfig = None, interpreter=None):
+    # 类级别的执行锁，确保同一时间只有一个代码在执行
+    _execution_lock = None
+    
+    def __init__(self, config: MCPToolConfig = None, interpreter_or_factory=None):
         self.config = config or MCPToolConfig()
-        self.interpreter = interpreter
+        self._interpreter = interpreter_or_factory
+        self._interpreter_factory = None
+        
+        # 如果传入的是 callable，则作为 factory 使用
+        if callable(interpreter_or_factory):
+            self._interpreter_factory = interpreter_or_factory
+            self._interpreter = None
+        
+        # 初始化锁（类级别，所有实例共享）
+        if ExecutePythonTool._execution_lock is None:
+            import asyncio
+            ExecutePythonTool._execution_lock = asyncio.Lock()
+    
+    def _get_interpreter(self):
+        """获取 interpreter 实例（支持延迟初始化）"""
+        if self._interpreter is not None:
+            return self._interpreter
+        if self._interpreter_factory is not None:
+            self._interpreter = self._interpreter_factory()
+            return self._interpreter
+        return None
     
     @property
     def name(self) -> str:
@@ -353,10 +448,30 @@ class ExecutePythonTool(BaseTool):
             "required": ["code"]
         }
     
+    async def execute_async(self, code: str) -> str:
+        """异步执行 Python 代码（在单独线程中运行同步代码）"""
+        import asyncio
+        # 使用锁确保同一时间只有一个代码在执行，避免状态混乱
+        async with ExecutePythonTool._execution_lock:
+            return await asyncio.to_thread(self.execute, code)
+    
     def execute(self, code: str) -> str:
         """执行 Python 代码"""
-        if not self.interpreter:
+        interpreter = self._get_interpreter()
+        if not interpreter:
             return "错误: Python 执行器未配置"
+        
+        # 确保浏览器已初始化（在单独线程中）
+        if not interpreter._initialized:
+            import os
+            from dotenv import load_dotenv
+            load_dotenv(override=False)
+            debug_port_str = os.getenv("BROWSER_DEBUG_PORT", "")
+            debug_port = int(debug_port_str) if debug_port_str else None
+            headless = os.getenv("BROWSER_HEADLESS", "false").lower() == "true"
+            result = interpreter.initialize(headless=headless, debug_port=debug_port)
+            if not result.success:
+                return f"浏览器初始化失败: {result.stderr}"
         
         # 包装代码，注入预封装函数
         if self.config.include_prebuilt_funcs:
@@ -365,7 +480,7 @@ class ExecutePythonTool(BaseTool):
             full_code = code
         
         try:
-            result = self.interpreter.execute(full_code)
+            result = interpreter.execute(full_code)
             
             output = []
             if result.stdout:
@@ -467,6 +582,7 @@ class MCPToolSet:
     def create_tools(
         self,
         interpreter=None,
+        interpreter_factory=None,
         agent_factory=None,
         get_browser_state=None
     ) -> List[BaseTool]:
@@ -474,7 +590,8 @@ class MCPToolSet:
         根据配置创建工具列表
         
         Args:
-            interpreter: Python 代码执行器（execute_python 需要）
+            interpreter: Python 代码执行器（execute_python 需要，已废弃，请使用 interpreter_factory）
+            interpreter_factory: 返回 interpreter 的工厂函数（支持延迟初始化）
             agent_factory: Agent 工厂函数（agent_task 需要）
             get_browser_state: 获取浏览器状态的函数（help 需要）
         
@@ -487,7 +604,11 @@ class MCPToolSet:
             tools.append(HelpTool(self.config, get_browser_state))
         
         if self.config.enable_execute_python:
-            tools.append(ExecutePythonTool(self.config, interpreter))
+            # 优先使用 factory 模式，支持延迟初始化
+            if interpreter_factory:
+                tools.append(ExecutePythonTool(self.config, interpreter_factory))
+            else:
+                tools.append(ExecutePythonTool(self.config, interpreter))
         
         if self.config.enable_agent_task:
             tools.append(AgentTaskTool(self.config, agent_factory))

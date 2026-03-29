@@ -7,6 +7,14 @@ MCP 服务入口：渐进式披露的 MCP 工具集
 3. 支持工具灵活配置（可开关特定工具）
 """
 
+# 确保项目根目录在 sys.path 中，解决模块导入问题
+import sys
+from pathlib import Path
+
+_project_root = Path(__file__).parent.parent.resolve()
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import json
 import asyncio
 from typing import Dict, Any, Optional, List, Callable
@@ -58,7 +66,9 @@ class MCPServer:
         agent: Optional[ExecutorAgent] = None,
         name: str = "webclaw-mcp-server",
         tool_config: Optional[MCPToolConfig] = None,
-        llm_provider: Optional[LLMProvider] = None
+        llm_provider: Optional[LLMProvider] = None,
+        host: str = "127.0.0.1",
+        port: int = 8765
     ):
         """
         初始化 MCP 服务
@@ -68,6 +78,8 @@ class MCPServer:
             name: 服务名称
             tool_config: 工具配置（控制启用哪些工具）
             llm_provider: LLM 提供商（用于创建 Agent）
+            host: SSE 模式主机地址
+            port: SSE 模式端口
         """
         self.agent = agent
         self.name = name
@@ -77,27 +89,39 @@ class MCPServer:
         self._agent_factory = None
         self._interpreter = None
         self._registered_tools = []  # 保存工具引用
+        self._host = host
+        self._port = port
         
         if MCP_AVAILABLE:
             if USE_FASTMCP:
-                self.server = FastMCP(name)
+                self.server = FastMCP(name, host=host, port=port)
             else:
                 self.server = Server(name)
             self._register_tools()
     
     def _ensure_components(self):
-        """确保 interpreter 和 agent 已创建"""
+        """确保 interpreter 和 agent 已创建（延迟初始化浏览器）"""
         if self._interpreter is None:
-            from core.interpreter import PlaywrightInterpreter
-            self._interpreter = PlaywrightInterpreter()
-            self._interpreter.start()
+            from core.interpreter import CodeInterpreter
+            self._interpreter = CodeInterpreter()
+            # 浏览器延迟到实际使用时再初始化（在 ExecutePythonTool.execute 中处理）
+            print(f"[WebClaw] CodeInterpreter 已创建，浏览器将延迟初始化")
         
         if self.agent is None and self.tool_config.enable_agent_task:
             # 延迟创建 Agent
-            llm = self.llm_provider or LLMProvider()
+            if self.llm_provider is None:
+                import os
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    raise ValueError("请在 .env 文件中设置 OPENAI_API_KEY")
+                base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+                model = os.getenv("LLM_MODEL", "gpt-4o")
+                self.llm_provider = LLMProvider(api_key=api_key, base_url=base_url, model=model)
             from tools.python_executor import PythonExecutorTool
             tools = [PythonExecutorTool(self._interpreter)]
-            self.agent = ExecutorAgent(llm=llm, tools=tools)
+            self.agent = ExecutorAgent(llm=self.llm_provider, tools=tools)
     
     def _get_browser_state(self) -> Dict:
         """获取浏览器当前状态"""
@@ -121,13 +145,17 @@ class MCPServer:
         # 使用新的工具集工厂
         toolset = MCPToolSet(self.tool_config)
         
-        # 创建工具实例
+        # 创建工具实例 - 使用 lambda 延迟获取 interpreter
         def agent_factory():
             self._ensure_components()
             return self.agent
         
+        def interpreter_factory():
+            self._ensure_components()
+            return self._interpreter
+        
         tools = toolset.create_tools(
-            interpreter=self._interpreter,
+            interpreter_factory=interpreter_factory,
             agent_factory=agent_factory,
             get_browser_state=self._get_browser_state
         )
@@ -153,6 +181,9 @@ class MCPServer:
             async def wrapper(**kwargs):
                 if tool.name in ["execute_python", "agent_task", "browser_help"]:
                     self._ensure_components()
+                # 对 execute_python 使用异步执行方法
+                if tool.name == "execute_python" and hasattr(tool, 'execute_async'):
+                    return await tool.execute_async(**kwargs)
                 return tool.execute(**kwargs)
             
             wrapper.__doc__ = tool.description
@@ -179,8 +210,14 @@ class MCPServer:
         
         try:
             if USE_FASTMCP:
-                # FastMCP 使用 run 方法
-                await self.server.run(transport=transport)
+                # FastMCP 直接调用 async 方法
+                if transport == "stdio":
+                    await self.server.run_stdio_async()
+                elif transport == "sse":
+                    print(f"[WebClaw] SSE 服务器启动于 http://{self._host}:{self._port}/sse")
+                    await self.server.run_sse_async()
+                else:
+                    raise ValueError(f"不支持的传输方式: {transport}")
             else:
                 # 标准 Server
                 if transport == "stdio":
@@ -191,7 +228,7 @@ class MCPServer:
                     raise ValueError(f"不支持的传输方式: {transport}")
         finally:
             if self._interpreter:
-                self._interpreter.stop()
+                self._interpreter.close()
     
     def get_tools(self) -> List[MCPToolDefinition]:
         """
@@ -351,7 +388,10 @@ def create_server(
     enable_help: bool = True,
     enable_execute_python: bool = True,
     enable_agent_task: bool = True,
-    enable_experience_tools: bool = True
+    enable_experience_tools: bool = True,
+    # SSE 配置
+    host: str = "127.0.0.1",
+    port: int = 8765
 ) -> MCPServer:
     """
     创建 MCP 服务器实例（渐进式披露 + 可配置工具）
@@ -365,6 +405,8 @@ def create_server(
         enable_execute_python: 是否启用 execute_python 工具
         enable_agent_task: 是否启用 agent_task 工具
         enable_experience_tools: 是否启用经验管理工具
+        host: SSE 模式主机地址
+        port: SSE 模式端口
         
     Returns:
         MCPServer 实例
@@ -385,7 +427,9 @@ def create_server(
     return MCPServer(
         agent=None,  # 延迟创建
         tool_config=tool_config,
-        llm_provider=None  # 内部会根据需要创建
+        llm_provider=None,  # 内部会根据需要创建
+        host=host,
+        port=port
     )
 
 
@@ -399,11 +443,17 @@ def _get_env_bool(key: str, default: bool = True) -> bool:
 # 命令行入口
 if __name__ == "__main__":
     import argparse
+    from dotenv import load_dotenv
+    
+    # 加载 .env 文件（优先使用已存在的环境变量）
+    load_dotenv(override=False)
     
     parser = argparse.ArgumentParser(description="WebClaw MCP 服务器 - 渐进式披露设计")
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--debug-port", type=int, help="Chrome 调试端口")
     parser.add_argument("--transport", default="stdio", choices=["stdio", "sse"], help="传输方式")
+    parser.add_argument("--host", default="127.0.0.1", help="SSE 模式主机地址 (默认: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8765, help="SSE 模式端口 (默认: 8765)")
     parser.add_argument("--llm", default="anthropic", choices=["anthropic", "openai", "deepseek"], help="LLM 提供商")
     parser.add_argument("--llm-model", help="LLM 模型名称（如 deepseek-chat）")
     
@@ -429,7 +479,9 @@ if __name__ == "__main__":
         enable_help=enable_help,
         enable_execute_python=enable_python,
         enable_agent_task=enable_agent,
-        enable_experience_tools=enable_experience
+        enable_experience_tools=enable_experience,
+        host=args.host,
+        port=args.port
     )
     
     print(f"[WebClaw] 启动服务器...")

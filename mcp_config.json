@@ -1,22 +1,7 @@
 {
-  "$schema": "https://raw.githubusercontent.com/anthropics/model-context-protocol/main/schema/mcp.schema.json",
-  "_comment": "WebClaw MCP 配置模板 - 复制此内容到你的 IDE MCP 配置中",
-  "_instructions": [
-    "1. 将 {{PROJECT_PATH}} 替换为你的项目实际路径",
-    "2. Windows 路径示例: D:\\Projects\\MacroChromeMCP",
-    "3. macOS/Linux 路径示例: /Users/xxx/MacroChromeMCP"
-  ],
-
   "mcpServers": {
     "webclaw": {
-      "command": "{{PROJECT_PATH}}/venv/Scripts/python.exe",
-      "args": [
-        "{{PROJECT_PATH}}/server/mcp_server.py",
-        "--transport", "stdio"
-      ],
-      "env": {
-        "PYTHONPATH": "{{PROJECT_PATH}}"
-      }
+      "url": "http://127.0.0.1:8765/sse"
     }
   }
 }

@@ -11,9 +11,6 @@ title WebClaw - 生成 MCP 配置
 set "SCRIPT_DIR=%~dp0"
 for %%i in ("%SCRIPT_DIR%\..") do set "PROJECT_DIR=%%~fi"
 
-:: 将路径中的反斜杠转换为双反斜杠（JSON需要转义）
-set "JSON_PATH=%PROJECT_DIR:\=\\%"
-
 echo.
 echo ╔══════════════════════════════════════════════════════════╗
 echo ║                                                          ║
@@ -32,17 +29,15 @@ echo.
 echo {
 echo   "mcpServers": {
 echo     "webclaw": {
-echo       "command": "%JSON_PATH%\\venv\\Scripts\\python.exe",
-echo       "args": [
-echo         "%JSON_PATH%\\server\\mcp_server.py",
-echo         "--transport", "stdio"
-echo       ],
-echo       "env": {
-echo         "PYTHONPATH": "%JSON_PATH%"
-echo       }
+echo       "url": "http://127.0.0.1:8765/sse"
 echo     }
 echo   }
 echo }
+echo.
+echo ════════════════════════════════════════════════════════════
+echo.
+echo ⚠️  重要提示：
+echo    使用 SSE 模式前，请先运行 start_mcp_server.bat 启动服务
 echo.
 echo ════════════════════════════════════════════════════════════
 echo.
@@ -53,14 +48,7 @@ set "OUTPUT_FILE=%PROJECT_DIR%\my_mcp_config.json"
 echo {
 echo   "mcpServers": {
 echo     "webclaw": {
-echo       "command": "%JSON_PATH%\\venv\\Scripts\\python.exe",
-echo       "args": [
-echo         "%JSON_PATH%\\server\\mcp_server.py",
-echo         "--transport", "stdio"
-echo       ],
-echo       "env": {
-echo         "PYTHONPATH": "%JSON_PATH%"
-echo       }
+echo       "url": "http://127.0.0.1:8765/sse"
 echo     }
 echo   }
 echo }
@@ -68,8 +56,9 @@ echo }
 
 echo 配置已保存到: %OUTPUT_FILE%
 echo.
-echo 提示：
-echo   - Cursor 用户: 按 Ctrl+Shift+, 打开设置，点击 MCP，粘贴配置
-echo   - 或者复制 my_mcp_config.json 内容到 mcp.json
+echo 使用步骤：
+echo   1. 先运行 start_mcp_server.bat 启动 MCP 服务
+echo   2. Cursor 用户: 按 Ctrl+Shift+, 打开设置，点击 MCP，粘贴配置
+echo   3. 或者复制 my_mcp_config.json 内容到 mcp.json
 echo.
 pause
